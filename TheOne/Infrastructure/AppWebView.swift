@@ -188,6 +188,9 @@ struct AppWebView: UIViewRepresentable {
 
     private static let nativeBridgeScript = #"""
     (() => {
+      // Available before React hydrates, so the web shell can select its
+      // native one-column experience without mistaking mobile Safari for it.
+      document.documentElement.dataset.nativePlatform = 'ios';
       const post = (payload) => window.webkit?.messageHandlers?.theoneNative?.postMessage(payload);
       Object.defineProperty(window, 'TheOneNative', {
         configurable: false,
