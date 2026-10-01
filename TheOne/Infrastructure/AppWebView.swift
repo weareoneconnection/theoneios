@@ -8,6 +8,19 @@ enum WebLoadState: Equatable {
     case failed(String)
 }
 
+/// Tracks only URLs explicitly requested by SwiftUI. Redirect destinations do
+/// not replace this value: otherwise a state update after /exchange -> /os
+/// would replay the already-consumed one-time exchange URL.
+struct InitialNavigationState {
+    private(set) var requestedURL: URL?
+
+    mutating func shouldLoad(_ url: URL) -> Bool {
+        guard requestedURL != url else { return false }
+        requestedURL = url
+        return true
+    }
+}
+
 struct AppWebView: UIViewRepresentable {
     let initialURL: URL
     let allowedHost: String
@@ -43,8 +56,9 @@ struct AppWebView: UIViewRepresentable {
         webView.isOpaque = false
         webView.backgroundColor = UIColor(Brand.canvas)
         webView.scrollView.backgroundColor = UIColor(Brand.canvas)
-        webView.load(URLRequest(url: initialURL, cachePolicy: .reloadRevalidatingCacheData, timeoutInterval: 60))
-        context.coordinator.loadedURL = initialURL
+        if context.coordinator.initialNavigation.shouldLoad(initialURL) {
+            webView.load(URLRequest(url: initialURL, cachePolicy: .reloadRevalidatingCacheData, timeoutInterval: 60))
+        }
         context.coordinator.reloadToken = reloadToken
         return webView
     }
@@ -60,15 +74,14 @@ struct AppWebView: UIViewRepresentable {
             context.coordinator.reloadToken = reloadToken
             webView.reloadFromOrigin()
         }
-        if context.coordinator.loadedURL != initialURL {
-            context.coordinator.loadedURL = initialURL
+        if context.coordinator.initialNavigation.shouldLoad(initialURL) {
             webView.load(URLRequest(url: initialURL, cachePolicy: .reloadRevalidatingCacheData, timeoutInterval: 60))
         }
     }
 
     final class Coordinator: NSObject, WKNavigationDelegate, WKUIDelegate, WKScriptMessageHandler {
         var parent: AppWebView
-        var loadedURL: URL?
+        var initialNavigation = InitialNavigationState()
         var reloadToken: UUID?
 
         init(parent: AppWebView) {
@@ -99,7 +112,6 @@ struct AppWebView: UIViewRepresentable {
 
         func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
             if let url = webView.url {
-                loadedURL = url
                 parent.onNavigation(url)
             }
             parent.onStateChange(.ready)

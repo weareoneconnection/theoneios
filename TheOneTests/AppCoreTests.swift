@@ -23,4 +23,17 @@ final class AppCoreTests: XCTestCase {
         XCTAssertEqual(hash.count, 64)
         XCTAssertNil(hash.range(of: "[^a-f0-9]", options: .regularExpression))
     }
+
+    func testRedirectDoesNotReplayOneTimeInitialURL() {
+        let exchange = URL(string: "https://www.the1os.io/api/auth/desktop/exchange?code=once")!
+        let workspace = URL(string: "https://www.the1os.io/os")!
+        var state = InitialNavigationState()
+
+        XCTAssertTrue(state.shouldLoad(exchange))
+        // WebKit may redirect to the workspace, but SwiftUI still owns the
+        // same initial request and must not load it a second time.
+        XCTAssertFalse(state.shouldLoad(exchange))
+        XCTAssertTrue(state.shouldLoad(workspace))
+        XCTAssertFalse(state.shouldLoad(workspace))
+    }
 }
